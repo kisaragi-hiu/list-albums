@@ -14,8 +14,12 @@
 ;;
 ;;; Commentary:
 ;;
-;;  List albums in a table by duration.
-;;  Extracted from my config.
+;; Listing albums by album duration.
+;; Documented in internal note 2021-08-03T02:02:08+0900 and
+;; https://kisaragi-hiu.com/sort-albums-by-duration
+;;
+;; Since no music player that I've tried supports this, I had to implement this
+;; myself. It's been useful from time to time, so I've made it a package.
 ;;
 ;;; Code:
 
@@ -36,8 +40,6 @@
   :group 'list-albums
   :type 'file)
 
-;; Listing albums by album duration
-;; Documented in internal note 2021-08-03T02:02:08+0900 and https://kisaragi-hiu.com/sort-albums-by-duration
 (defun list-albums--song-duration (song-file)
   "Return duration of SONG-FILE in seconds."
   (with-temp-buffer
