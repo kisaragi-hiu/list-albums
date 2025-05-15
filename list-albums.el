@@ -66,12 +66,19 @@
       (map-elt it 'duration)
       string-to-number)))
 
+(defun list-albums--read-cache ()
+  "Read the cache JSON file."
+  ;; Initialize cache file if it doesn't exist
+  (unless (file-exists-p list-albums-cache-file)
+    (with-temp-file list-albums-cache-file
+      (insert "{}")))
+  (with-temp-buffer
+    (insert-file-contents list-albums-cache-file)
+    (json-parse-buffer)))
+
 (defun list-albums--folder-duration (folder)
   "Return duration of all songs in FOLDER."
-  (let* ((cache
-          (with-temp-buffer
-            (insert-file-contents list-albums-cache-file)
-            (json-parse-buffer)))
+  (let* ((cache (list-albums--read-cache))
          (name (f-filename folder))
          (update-cache nil)
          value)
@@ -98,10 +105,7 @@
   (unless (and (numberp seconds)
                (>= seconds 0))
     (error "Invalid value for SECONDS, must be a number that is >= 0"))
-  (let* ((cache
-          (with-temp-buffer
-            (insert-file-contents list-albums-cache-file)
-            (json-parse-buffer))))
+  (let* ((cache (list-albums--read-cache)))
     (map-put! cache name seconds)
     (let ((json-encoding-pretty-print t))
       (with-temp-file list-albums-cache-file
