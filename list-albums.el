@@ -8,7 +8,7 @@
 ;; Version: 0.0.1
 ;; Keywords: multimedia
 ;; Homepage: https://github.com/kisaragi-hiu/list-albums
-;; Package-Requires: ((emacs "29.3"))
+;; Package-Requires: ((emacs "29.3") (f "0.21.0") (dash "2.19.1"))
 ;;
 ;; This file is not part of GNU Emacs.
 ;;
@@ -19,10 +19,26 @@
 ;;
 ;;; Code:
 
+(require 'f)
+(require 'seq)
+(require 'map)
+(require 'dash)
+(require 'json)
+(require 'tabulated-list)
+
+(defgroup list-albums nil
+  "List music albums by duration."
+  :group 'multimedia
+  :prefix "list-albums-")
+
+(defcustom list-albums-cache-file (expand-file-name "folder-durations.json" user-emacs-directory)
+  "Path to albums cache JSON file. This file can also define extra albums."
+  :group 'list-albums
+  :type 'file)
 
 ;; Listing albums by album duration
 ;; Documented in internal note 2021-08-03T02:02:08+0900 and https://kisaragi-hiu.com/sort-albums-by-duration
-(defun k/song-duration (song-file)
+(defun list-albums--song-duration (song-file)
   "Return duration of SONG-FILE in seconds."
   (with-temp-buffer
     (call-process
@@ -42,12 +58,11 @@
       (map-elt it 'duration)
       string-to-number)))
 
-(defvar k/list-albums/cache-file (f-expand "folder-durations.json" doom-user-dir))
-(defun k/folder-duration (folder)
+(defun list-albums--folder-duration (folder)
   "Return duration of all songs in FOLDER."
   (let* ((cache
           (with-temp-buffer
-            (insert-file-contents k/list-albums/cache-file)
+            (insert-file-contents list-albums-cache-file)
             (json-parse-buffer)))
          (name (f-filename folder))
          (update-cache nil)
@@ -56,18 +71,18 @@
                     cached
                   (setq update-cache t)
                   (--> (directory-files folder t)
-                       (mapcar #'k/song-duration it)
+                       (mapcar #'list-albums--song-duration it)
                        -non-nil
                        (apply #'+ it))))
     (when update-cache
       (map-put! cache name value)
       (let ((json-encoding-pretty-print t))
-        (with-temp-file k/list-albums/cache-file
+        (with-temp-file list-albums-cache-file
           (insert (json-encode cache)))))
     value))
 
 ;;;###autoload
-(defun k/list-albums/add-to-cache (name seconds)
+(defun list-albums-add-to-cache (name seconds)
   "Add an entry saying NAME is SECONDS long to the cache."
   (interactive
    (list (read-string "Name: ")
@@ -77,24 +92,24 @@
     (error "Invalid value for SECONDS, must be a number that is >= 0"))
   (let* ((cache
           (with-temp-buffer
-            (insert-file-contents k/list-albums/cache-file)
+            (insert-file-contents list-albums-cache-file)
             (json-parse-buffer))))
     (map-put! cache name seconds)
     (let ((json-encoding-pretty-print t))
-      (with-temp-file k/list-albums/cache-file
+      (with-temp-file list-albums-cache-file
         (insert (json-encode cache))))))
 
 ;;;###autoload
-(defun k/list-albums (dir)
+(defun list-albums (dir)
   "List music folders in DIR, providing a duration field for sort."
   (interactive (list (xdg-user-dir "MUSIC")))
   (let (folders)
     (dolist-with-progress-reporter (folder (f-directories dir))
         (format "Probing folders in %s..." dir)
       ;; populate cache
-      (k/folder-duration folder))
+      (list-albums--folder-duration folder))
     (setq folders (with-temp-buffer
-                    (insert-file-contents k/list-albums/cache-file)
+                    (insert-file-contents list-albums-cache-file)
                     (let ((json-key-type 'string))
                       (json-read))))
     (setq folders (--filter (/= 0 (cdr it)) folders))
@@ -122,7 +137,6 @@
                                       :seconds (cdr folder))))
               tabulated-list-entries))
       (tabulated-list-revert))))
-
 
 (provide 'list-albums)
 ;;; list-albums.el ends here
