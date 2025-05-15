@@ -23,12 +23,13 @@
 ;;
 ;;; Code:
 
-(require 'f)
-(require 'seq)
-(require 'map)
 (require 'dash)
+(require 'f)
 (require 'json)
+(require 'map)
+(require 'seq)
 (require 'tabulated-list)
+(require 'xdg)
 
 (defgroup list-albums nil
   "List music albums by duration."
@@ -39,6 +40,11 @@
   "Path to albums cache JSON file. This file can also define extra albums."
   :group 'list-albums
   :type 'file)
+
+(defcustom list-albums-music-dir (xdg-user-dir "MUSIC")
+  "Main directory of music albums."
+  :group 'list-albums
+  :type 'directory)
 
 (defun list-albums--song-duration (song-file)
   "Return duration of SONG-FILE in seconds."
@@ -104,7 +110,7 @@
 ;;;###autoload
 (defun list-albums (dir)
   "List music folders in DIR, providing a duration field for sort."
-  (interactive (list (xdg-user-dir "MUSIC")))
+  (interactive (list list-albums-music-dir))
   (let (folders)
     (dolist-with-progress-reporter (folder (f-directories dir))
         (format "Probing folders in %s..." dir)
