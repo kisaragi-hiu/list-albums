@@ -129,7 +129,7 @@
                           (get-buffer-create "*k/albums*"))
       (when (= 0 (buffer-size))
         (tabulated-list-mode)
-        (setq-local revert-buffer-function (lambda (&rest _) (k/list-albums dir)))
+        (setq-local revert-buffer-function (lambda (&rest _) (list-albums dir)))
         (setq tabulated-list-format
               (vector
                '("folder" 70 t)
