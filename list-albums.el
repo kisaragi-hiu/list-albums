@@ -315,7 +315,9 @@ If the entry is from a folder, it will be recalculated the next time."
       (setq tabulated-list-format
             (vector
              `("folder"
-               ,(max 70 (floor (* (window-width) 0.8)))
+               ;; Clamp to 70~200 to not cut out too much while also not being
+               ;; too wide on ultrawide monitors
+               ,(min 200 (max 70 (floor (* (window-width) 0.8))))
                t)
              (list "duration" 20
                    (lambda (a b)
