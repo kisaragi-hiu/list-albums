@@ -209,6 +209,8 @@ The returned data includes ID and ARTIST-CREDIT."
   "Look up an album with TITLE-QUERY from MusicBrainz."
   (interactive
    (list (read-string "Title query: " nil 'list-albums-lookup-album)))
+  ;; Instead of having to worry about race conditions, we can maybe just keep
+  ;; this synchronous.
   (let ((title nil)
         (artist nil)
         (id nil)
