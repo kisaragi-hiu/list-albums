@@ -308,7 +308,7 @@ If the entry is from a folder, it will be recalculated the next time."
                       (json-read))))
     (setq folders (--filter (/= 0 (cdr it)) folders))
     (with-current-buffer (pop-to-buffer
-                          (get-buffer-create "*k/albums*"))
+                          (get-buffer-create "*list-albums*"))
       ;; All of this is safe to run even if the buffer is already populated
       (tabulated-list-mode)
       (setq-local revert-buffer-function (lambda (&rest _) (list-albums dir)))
