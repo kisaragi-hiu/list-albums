@@ -30,6 +30,46 @@
 (require 'seq)
 (require 'tabulated-list)
 (require 'xdg)
+(require 'cl-lib)
+
+(require 'eww)
+
+(defun list-albums--mark-metadata (collection metadata)
+  "Mark COLLECTION as having completiong metadata METADATA.
+METADATA should be an alist to specify all sorts of completion metadata,
+such as `category' or `display-sort-function'. (Unfortunately there
+doesn\\='t seem to be an index of them in the manual.)"
+  (lambda (str pred action)
+    (pcase action
+      ('metadata
+       `(metadata . ,metadata))
+      (_
+       (all-completions str collection pred)))))
+
+(defun list-albums--sort-releases-numerically (candidates)
+  "Sort release CANDIDATES with their prefix numbers."
+  (let* ((cache (make-hash-table :test #'equal))
+         (key (lambda (thing)
+                (or (gethash thing cache)
+                    (with-temp-buffer
+                      (insert thing)
+                      (goto-char (point-min))
+                      ;; skip through the prefix JSON object, which we are using to
+                      ;; store the ID right in the string...
+                      (json-parse-buffer)
+                      (puthash thing
+                               (string-to-number
+                                (buffer-substring (point) (point-max)))
+                               cache))))))
+    (sort candidates
+          (lambda (a b)
+            ;; This is what the numeric sort in `org-sort' does too
+            (> (funcall key a)
+               (funcall key b))))))
+
+(defun list-albums--face (thing face)
+  "Return THING as a string with FACE as its face property."
+  (propertize (format "%s" thing) 'face face))
 
 (defgroup list-albums nil
   "List music albums by duration."
@@ -95,6 +135,122 @@
         (with-temp-file list-albums-cache-file
           (insert (json-encode cache)))))
     value))
+
+(defvar url-request-extra-headers)
+(defun list-albums--fetch-json-sync (url)
+  "Fetch from URL using the right headers, then parse the return as JSON."
+  (let ((cache-buffer-name (format "k/tmp:%s" url))
+        (url-request-extra-headers
+         '(("User-Agent" . "KisaragiHiuListAlbumsEl/0.0.1(https://kisaragi-hiu.com)")
+           ("Accept" . "application/json"))))
+    (with-current-buffer (or (get-buffer cache-buffer-name)
+                             (url-retrieve-synchronously url :silent))
+      (unless (equal cache-buffer-name (buffer-name))
+        (clone-buffer cache-buffer-name))
+      (goto-char (point-min))
+      (eww-parse-headers)
+      (decode-coding-region (point) (point-max) 'utf-8)
+      (json-parse-buffer :array-type 'list :object-type 'alist))))
+
+(defun list-albums--read-release (prompt releases)
+  "Choose a release from RELEASES and return some of its metadata.
+PROMPT is shown to the user.
+The returned data includes ID and ARTIST-CREDIT."
+  (let ((sort-releases (lambda (candidates)
+                         (let* ((cache (make-hash-table :test #'equal))
+                                (key (lambda (thing)
+                                       (or (gethash thing cache)
+                                           (with-temp-buffer
+                                             (insert thing)
+                                             (goto-char (point-min))
+                                             ;; skip through the prefix JSON object, which we are using to
+                                             ;; store the ID right in the string...
+                                             (json-parse-buffer)
+                                             (puthash thing
+                                                      (string-to-number
+                                                       (buffer-substring (point) (point-max)))
+                                                      cache))))))
+                           (sort candidates
+                                 (lambda (a b)
+                                   ;; This is what the numeric sort in `org-sort' does too
+                                   (> (funcall key a)
+                                      (funcall key b)))))))
+        (collection (cl-loop
+                     for release in releases
+                     collect (let-alist release
+                               (format "%s%s\t%s %s(%s tracks%s)"
+                                       (propertize (json-encode
+                                                    `((id . ,.id)
+                                                      (artist-credit ,.artist-credit)))
+                                                   'invisible t)
+                                       (-> (format "(score: %s)" .score)
+                                           (list-albums--face 'font-lock-comment-face))
+                                       (-> .title
+                                           (list-albums--face 'font-lock-property-name-face))
+                                       (--> (cdr (assq 'name (car .artist-credit)))
+                                            (list-albums--face it 'font-lock-string-face)
+                                            (format (pcase (length .artist-credit)
+                                                      (0 "")
+                                                      (1 "by %s ")
+                                                      (_ "by %s and others "))
+                                                    it))
+                                       .track-count
+                                       (format (if .country ", %s" "")
+                                               (list-albums--face .country 'font-lock-string-face)))))))
+    (-some-> (completing-read prompt
+                              (list-albums--mark-metadata
+                               collection
+                               `((display-sort-function . ,sort-releases)))
+                              nil t)
+      json-read-from-string)))
+
+;;;###autoload
+(defun list-albums-lookup-album (title-query)
+  "Look up an album with TITLE-QUERY from MusicBrainz."
+  (interactive
+   (list (read-string "Title query: " nil 'list-albums-lookup-album)))
+  (let ((title nil)
+        (artist nil)
+        (id nil)
+        ;; MusicBrainz uses milliseconds
+        (duration-ms 0))
+    (message "Searching for releases matching %S..." title-query)
+    (let ((res (list-albums--fetch-json-sync
+                (format "https://musicbrainz.org/ws/2/release?%s"
+                        (url-build-query-string
+                         `((query ,title-query)
+                           (limit 10)
+                           (offset 0))))))
+          (props nil))
+      (unless res (error "Unable to get a response for the query"))
+      (setq props (list-albums--read-release "Select release: "
+                                             (alist-get 'releases res)))
+      (unless props (error "Unable to select a release"))
+      (let-alist props
+        (setq id .id)
+        ;; Don't bother setting artist if there is more than one
+        (when (= 1 (length .artist-credit))
+          (setq artist
+                (->> (car .artist-credit)
+                     (alist-get 'name))))))
+    (message "Looking up release %S..." id)
+    (let ((res (list-albums--fetch-json-sync
+                (format "https://musicbrainz.org/ws/2/release/%s?%s"
+                        id
+                        (url-build-query-string
+                         `((inc "recordings")))))))
+      (unless res (error "Unable to get a response for the release"))
+      (let-alist res
+        (setq title .title)
+        (dolist (track (->> (elt .media 0)
+                            (alist-get 'tracks)))
+          (cl-incf duration-ms (let-alist track .length)))))
+    (unless (and title duration-ms)
+      (error "Title or duration is missing"))
+    (list-albums-add-to-cache (if artist
+                                  (format "%s - %s" artist title)
+                                title)
+                              (/ duration-ms 1000.0))))
 
 ;;;###autoload
 (defun list-albums-add-to-cache (name seconds)
