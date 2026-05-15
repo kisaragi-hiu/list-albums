@@ -309,21 +309,23 @@ If the entry is from a folder, it will be recalculated the next time."
     (setq folders (--filter (/= 0 (cdr it)) folders))
     (with-current-buffer (pop-to-buffer
                           (get-buffer-create "*k/albums*"))
-      (when (= 0 (buffer-size))
-        (tabulated-list-mode)
-        (setq-local revert-buffer-function (lambda (&rest _) (list-albums dir)))
-        (setq tabulated-list-format
-              (vector
-               '("folder" 70 t)
-               (list "duration" 20
-                     (lambda (a b)
-                       ;; An entry is (ID ["<folder>" "<duration>"]).
-                       ;;
-                       ;; <duration> looks like (label :key val :key val...)
-                       ;; when props are given.
-                       (< (-> (cadr a) (elt 1) cdr (plist-get :seconds))
-                          (-> (cadr b) (elt 1) cdr (plist-get :seconds)))))))
-        (tabulated-list-init-header))
+      ;; All of this is safe to run even if the buffer is already populated
+      (tabulated-list-mode)
+      (setq-local revert-buffer-function (lambda (&rest _) (list-albums dir)))
+      (setq tabulated-list-format
+            (vector
+             `("folder"
+               ,(max 70 (floor (* (window-width) 0.8)))
+               t)
+             (list "duration" 20
+                   (lambda (a b)
+                     ;; An entry is (ID ["<folder>" "<duration>"]).
+                     ;;
+                     ;; <duration> looks like (label :key val :key val...)
+                     ;; when props are given.
+                     (< (-> (cadr a) (elt 1) cdr (plist-get :seconds))
+                        (-> (cadr b) (elt 1) cdr (plist-get :seconds)))))))
+      (tabulated-list-init-header)
       (setq tabulated-list-entries nil)
       (dolist (folder folders)
         (push (list nil (vector (f-filename (car folder))
