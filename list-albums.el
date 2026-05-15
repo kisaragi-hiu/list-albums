@@ -181,13 +181,13 @@ The returned data includes ID and ARTIST-CREDIT."
                                (format "%s%s\t%s %s(%s tracks%s)"
                                        (propertize (json-encode
                                                     `((id . ,.id)
-                                                      (artist-credit ,.artist-credit)))
+                                                      (artist-credit . ,.artist-credit)))
                                                    'invisible t)
                                        (-> (format "(score: %s)" .score)
                                            (list-albums--face 'font-lock-comment-face))
                                        (-> .title
                                            (list-albums--face 'font-lock-property-name-face))
-                                       (--> (cdr (assq 'name (car .artist-credit)))
+                                       (--> (cdr (assq 'name (elt .artist-credit 0)))
                                             (list-albums--face it 'font-lock-string-face)
                                             (format (pcase (length .artist-credit)
                                                       (0 "")
@@ -231,7 +231,7 @@ The returned data includes ID and ARTIST-CREDIT."
         ;; Don't bother setting artist if there is more than one
         (when (= 1 (length .artist-credit))
           (setq artist
-                (->> (car .artist-credit)
+                (->> (elt .artist-credit 0)
                      (alist-get 'name))))))
     (message "Looking up release %S..." id)
     (let ((res (list-albums--fetch-json-sync
