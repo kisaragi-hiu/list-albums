@@ -205,8 +205,9 @@ The returned data includes ID and ARTIST-CREDIT."
       json-read-from-string)))
 
 ;;;###autoload
-(defun list-albums-lookup-album (title-query)
-  "Look up an album with TITLE-QUERY from MusicBrainz."
+(defun list-albums-add-album-to-cache (title-query)
+  "Add an album\\='s length to the cache by looking it up with TITLE-QUERY.
+The lookup is done on MusicBrainz."
   (interactive
    (list (read-string "Title query: " nil 'list-albums-lookup-album)))
   ;; Instead of having to worry about race conditions, we can maybe just keep
