@@ -209,7 +209,7 @@ The returned data includes ID and ARTIST-CREDIT."
   "Add an album\\='s length to the cache by looking it up with TITLE-QUERY.
 The lookup is done on MusicBrainz."
   (interactive
-   (list (read-string "Title query: " nil 'list-albums-lookup-album)))
+   (list (read-string "Title query: " nil 'list-albums-add-album-to-cache)))
   ;; Instead of having to worry about race conditions, we can maybe just keep
   ;; this synchronous.
   (let ((title nil)
@@ -231,11 +231,12 @@ The lookup is done on MusicBrainz."
       (unless props (error "Unable to select a release"))
       (let-alist props
         (setq id .id)
-        ;; Don't bother setting artist if there is more than one
-        (when (= 1 (length .artist-credit))
-          (setq artist
-                (->> (elt .artist-credit 0)
-                     (alist-get 'name))))))
+        (setq artist
+              (pcase (length .artist-credit)
+                (0 nil)
+                (1 (->> (elt .artist-credit 0)
+                        (alist-get 'name)))
+                (_ 'many)))))
     (message "Looking up release %S..." id)
     (let ((res (list-albums--fetch-json-sync
                 (format "https://musicbrainz.org/ws/2/release/%s?%s"
@@ -250,10 +251,15 @@ The lookup is done on MusicBrainz."
           (cl-incf duration-ms (let-alist track .length)))))
     (unless (and title duration-ms)
       (error "Title or duration is missing"))
-    (let ((final-name (if artist
-                          (format "%s - %s" artist title)
-                        title))
-          (duration (/ duration-ms 1000.0)))
+    (let* ((suggestion (cond ((stringp artist)
+                              (format "%s - %s" artist title))
+                             ((symbolp artist)
+                              (format "Various Artists - %s" title))
+                             (t title)))
+           (final-name (read-string "What should the album be called in the list: " suggestion 'list-albums-add-album-to-cache--final nil nil))
+           ;; Default to using suggestion
+           (final-name (if (string-blank-p final-name) suggestion final-name))
+           (duration (/ duration-ms 1000.0)))
       (list-albums-add-to-cache final-name duration)
       (message "Added %S (%S seconds) to albums cache file" final-name duration))))
 
