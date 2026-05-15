@@ -247,10 +247,12 @@ The returned data includes ID and ARTIST-CREDIT."
           (cl-incf duration-ms (let-alist track .length)))))
     (unless (and title duration-ms)
       (error "Title or duration is missing"))
-    (list-albums-add-to-cache (if artist
-                                  (format "%s - %s" artist title)
-                                title)
-                              (/ duration-ms 1000.0))))
+    (let ((final-name (if artist
+                          (format "%s - %s" artist title)
+                        title))
+          (duration (/ duration-ms 1000.0)))
+      (list-albums-add-to-cache final-name duration)
+      (message "Added %S (%S seconds) to albums cache file" final-name duration))))
 
 ;;;###autoload
 (defun list-albums-add-to-cache (name seconds)
