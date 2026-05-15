@@ -341,6 +341,7 @@ If the entry is from a folder, it will be recalculated the next time."
                                 (list (format-seconds "%.2h:%.2m:%.2s" (cdr folder))
                                       :seconds (cdr folder))))
               tabulated-list-entries))
+      (setq-local tabulated-list-sort-key '(duration . t))
       (tabulated-list-revert))))
 
 (provide 'list-albums)
