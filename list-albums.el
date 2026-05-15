@@ -32,6 +32,7 @@
 (require 'xdg)
 (require 'cl-lib)
 
+(require 'queue)
 (require 'eww)
 
 (defun list-albums--mark-metadata (collection metadata)
@@ -137,16 +138,22 @@ doesn\\='t seem to be an index of them in the manual.)"
     value))
 
 (defvar url-request-extra-headers)
+(defvar list-albums--fetch-buffer-queue (make-queue)
+  "Temporary storage of cache buffers for `list-albums--fetch-json-sync'.")
 (defun list-albums--fetch-json-sync (url)
   "Fetch from URL using the right headers, then parse the return as JSON."
-  (let ((cache-buffer-name (format "k/tmp:%s" url))
+  (let ((cache-buffer-name (format " list-albums:%s" url))
         (url-request-extra-headers
          '(("User-Agent" . "KisaragiHiuListAlbumsEl/0.0.1(https://kisaragi-hiu.com)")
            ("Accept" . "application/json"))))
     (with-current-buffer (or (get-buffer cache-buffer-name)
                              (url-retrieve-synchronously url :silent))
       (unless (equal cache-buffer-name (buffer-name))
-        (clone-buffer cache-buffer-name))
+        (clone-buffer cache-buffer-name)
+        (queue-enqueue list-albums--fetch-buffer-queue cache-buffer-name)
+        ;; Only keep 3 of these temporary buffers
+        (when (> (queue-length list-albums--fetch-buffer-queue) 3)
+          (kill-buffer (queue-dequeue list-albums--fetch-buffer-queue))))
       (goto-char (point-min))
       (eww-parse-headers)
       (decode-coding-region (point) (point-max) 'utf-8)
