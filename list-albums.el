@@ -270,6 +270,21 @@ The returned data includes ID and ARTIST-CREDIT."
         (insert (json-encode cache))))))
 
 ;;;###autoload
+(defun list-albums-delete-from-cache (&optional name)
+  "Delete entry for NAME from the cache.
+If the entry is from a folder, it will be recalculated the next time."
+  (interactive)
+  (let* ((cache (list-albums--read-cache)))
+    (unless name
+      (setq name (completing-read "Delete entry: " (map-keys cache)
+                                  nil t
+                                  nil 'list-albums-delete-from-cache)))
+    (setq cache (map-delete cache name))
+    (let ((json-encoding-pretty-print t))
+      (with-temp-file list-albums-cache-file
+        (insert (json-encode cache))))))
+
+;;;###autoload
 (defun list-albums (dir)
   "List music folders in DIR, providing a duration field for sort."
   (interactive (list list-albums-music-dir))
